@@ -3,6 +3,23 @@
 using namespace std;
 using namespace TreeUtils;
 
+size_t HyperCutsNodeBytes(const HyperCutsNode* node) {
+	if (node == nullptr) {
+		return 0;
+	}
+
+	size_t total = sizeof(*node);
+	total += node->classifier.size() * sizeof(Rule*);
+	total += node->children.size() * sizeof(HyperCutsNode*);
+	total += node->childArray.capacity() * sizeof(HyperCutsNode*);
+	total += node->bounds.capacity() * sizeof(Range);
+	total += node->cuts.capacity() * sizeof(int);
+	for (const HyperCutsNode* child : node->children) {
+		total += HyperCutsNodeBytes(child);
+	}
+	return total;
+}
+
 void PrintRange(const Range& r) {
 	printf("[%u - %u]", r.low, r.high);
 }
@@ -522,6 +539,12 @@ void HyperCuts::ConstructClassifier(const vector<Rule>& rules) {
 	}
 	HyperCutsHelper helper;
 	root = helper.CreateTree(rl);
+}
+
+Memory HyperCuts::MemSizeBytes() const {
+	size_t total = rules.capacity() * sizeof(Rule);
+	total += HyperCutsNodeBytes(root);
+	return static_cast<Memory>(total);
 }
 
 int Classify(const HyperCutsNode* node, const Packet& packet) {

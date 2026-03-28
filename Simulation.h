@@ -30,6 +30,7 @@ public:
 
 class PacketClassifier {
 public:
+	virtual ~PacketClassifier() {}
 	virtual void ConstructClassifier(const std::vector<Rule>& rules) = 0;
 	virtual int ClassifyAPacket(const Packet& packet) = 0;
 	virtual void DeleteRule(size_t index) = 0;

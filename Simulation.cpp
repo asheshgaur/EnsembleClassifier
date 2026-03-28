@@ -123,6 +123,18 @@ std::vector<int> Simulator::PerformOnlyPacketClassification(PacketClassifier& cl
 	printf("\tConstruction time: %f ms\n", elapsed_milliseconds.count());
 	summary["ConstructionTime(ms)"] = std::to_string(elapsed_milliseconds.count());
 
+	if (packets.empty()) {
+		printf("\tNo packets available for classification\n");
+		summary["ClassificationTime(s)"] = "0";
+		summary["Size(bytes)"] = std::to_string(classifier.MemSizeBytes());
+		summary["MemoryAccess"] = std::to_string(classifier.MemoryAccess());
+		summary["Tables"] = std::to_string(classifier.NumTables());
+		summary["TableSizes"] = "";
+		summary["TableQueries"] = "";
+		summary["AvgQueries"] = "0";
+		return std::vector<int>();
+	}
+
 	const int trials = 10;
 	std::chrono::duration<double> sum_time(0);
 	std::vector<int> results;

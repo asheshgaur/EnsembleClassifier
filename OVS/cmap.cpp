@@ -190,7 +190,7 @@ size_t cache_line_size() {
 
 
 
-//sorrachai's platform
+// Platform-specific cache line size assumption.
 #define CACHE_LINE_SIZE 64
 
 #define CMAP_ENTRY_SIZE (4 + (UINTPTR_MAX == UINT32_MAX ? 4 : 8))
@@ -201,11 +201,6 @@ size_t cache_line_size() {
 /* Pad to make a bucket a full cache line in size: 4 on 32-bit, 0 on 64-bit. */
 #define CMAP_PADDING ((CACHE_LINE_SIZE - 4) - (CMAP_K * CMAP_ENTRY_SIZE))
 
-#define MAX(a,b) \
-   ({ __typeof__ (a) _a = (a); \
-       __typeof__ (b) _b = (b); \
-     _a > _b ? _a : _b; })
-
 static inline int
 raw_ctz(uint64_t n)
 {
@@ -213,16 +208,8 @@ raw_ctz(uint64_t n)
 	unsigned long r = 0;
 	_BitScanForward64(&r, n);
 	return r;
-#elif defined(__linux__)
-	return __builtin_ctzll(n);
 #else
-	unsigned long low = n, high, r = 0;
-	if (_BitScanForward(&r, low)) {
-		return r;
-	}
-	high = n >> 32;
-	_BitScanForward(&r, high);
-	return r + 32;
+	return __builtin_ctzll(n);
 #endif
 }
 
@@ -306,6 +293,10 @@ xzalloc_cacheline(size_t size)
 
 /* A cuckoo hash bucket.  Designed to be cache-aligned and exactly one cache
 * line long. */
+struct cmap_bucket_entry {
+	struct cmap_node *next;
+};
+
 struct cmap_bucket {
 
 	uint32_t counter;
@@ -317,7 +308,7 @@ struct cmap_bucket {
 	* pair is unused.  In-use slots are not necessarily in the earliest
 	* slots. */
 	uint32_t hashes[CMAP_K];
-	struct cmap_node nodes[CMAP_K];
+	struct cmap_bucket_entry nodes[CMAP_K];
 
 	/* Padding to make cmap_bucket exactly one cache line long. */
 #if CMAP_PADDING > 0
@@ -1003,15 +994,15 @@ struct cmap_node *replacement, uint32_t hash, uint32_t h)
 		replacement->next = node->next;
 	}
 
-	struct cmap_node *iter = &b->nodes[slot];
+	struct cmap_node **iter = &b->nodes[slot].next;
 	for (;;) {
-		struct cmap_node *next = iter->next;
+		struct cmap_node *next = *iter;
 
 		if (next == node) {
-			iter->next = replacement;
+			*iter = replacement;
 			return true;
 		}
-		iter = next;
+		iter = &next->next;
 	}
 }
 
@@ -1190,7 +1181,7 @@ int cmap_largest_chain(const struct cmap* cmap)
 	for (uint32_t i = 0; i <= impl->mask; i++) {
 		for (int j = 0; j < CMAP_K; j++) {
 			int chain = 0;
-			cmap_node* n = &impl->buckets[i].nodes[j];
+			cmap_node* n = impl->buckets[i].nodes[j].next;
 			unsigned int key = 0;
 			while (n) {
 				chain++;

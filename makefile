@@ -6,11 +6,22 @@ MITPATH = PartitionSort/
 TRACEPATH = ClassBenchTraceGenerator/
 TREEPATH = Trees/
 UTILPATH = Utilities/
+SMARTSPLIT_PATH = External/SmartSplit
+SMARTSPLIT_HC_PATH = $(SMARTSPLIT_PATH)/hc
+SMARTSPLIT_HS_PATH = $(SMARTSPLIT_PATH)/hs_lookup
+SMARTSPLIT_ANALYZER_PATH = $(SMARTSPLIT_PATH)/analyzer
+TUPLEMERGE_PATH = External/TupleMerge
+BYTECUTS_PATH = External/ByteCuts
+CUTTSS_PATH = External/CutTSS
+CUTSPLIT_PATH = External/CutSplit
+TABTREE_PATH = External/TabTree
+NPTREE_PATH = External/NPTree
 
 VPATH = $(OVSPATH) $(MITPATH) $(TRACEPATH) $(IOPATH) $(UTILPATH) $(TREEPATH) $(SPPATH) 
 
 CXX = g++
-CXXFLAGS = -g -std=c++14  -fpermissive -O3 $(INCLUDE)
+THREAD_FLAGS = -pthread
+CXXFLAGS = -g -std=c++14  -fpermissive -O3 $(THREAD_FLAGS) $(INCLUDE)
 
 # Targets needed to bring the executable up to date
 
@@ -85,6 +96,39 @@ Tcam.o : Tcam.cpp Tcam.h ElementaryClasses.h
 
 .PHONY: clean
 .PHONY: uninstall
+.PHONY: smartsplit
+.PHONY: tuplemerge
+.PHONY: bytecuts
+.PHONY: cuttss
+.PHONY: cutsplit
+.PHONY: tabtree
+.PHONY: nptree
+.PHONY: externals
+
+tuplemerge:
+	$(MAKE) -C $(TUPLEMERGE_PATH)
+
+bytecuts:
+	$(MAKE) -C $(BYTECUTS_PATH)
+
+cuttss:
+	$(MAKE) -C $(CUTTSS_PATH)
+
+cutsplit:
+	$(MAKE) -C $(CUTSPLIT_PATH)
+
+tabtree:
+	$(MAKE) -C $(TABTREE_PATH)
+
+nptree:
+	$(MAKE) -C $(NPTREE_PATH)
+
+smartsplit:
+	$(MAKE) -C $(SMARTSPLIT_HC_PATH)
+	$(MAKE) -C $(SMARTSPLIT_HS_PATH)
+	$(MAKE) -C $(SMARTSPLIT_ANALYZER_PATH)
+
+externals: tuplemerge bytecuts cuttss cutsplit tabtree nptree smartsplit
 
 clean:
 	rm *o

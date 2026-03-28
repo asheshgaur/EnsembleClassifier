@@ -1,0 +1,36 @@
+Conference Paper: 
+--Wenjun Li and et al, “TabTree: A TSS-assisted Bit-selecting Tree Scheme for Packet Classification with Balanced Rule Mapping” In ACM/IEEE Symposium on Architectures for Networking and Communications Systems (ANCS), 2019.
+
+TabTree Version 1.0:
+Released on www.wenjunli.com/TabTree
+Finished by Wenjun Li (Designer) and Ting Huang (Coder, Under the guidance of Wenjun Li)  
+Tested on Ubuntu 16.04.4 LTS 
+
+Requirement:
+g++ at least version 4.9.
+
+Installation: make
+How to run: ./main [options]
+
+Usage:
+./main [-b bucketSize][-t threshold(assume T_SA=T_DA)][-r ruleset][-e trace]
+
+Try now:
+./main 
+or 
+./main -b 4 -t 16 -r ./fw_1k -e ./fw_1k_trace 
+
+If you have any questions, feel free to contact with me. 
+For the future work, please pay attention to the website: www.wenjunli.com
+
+Wenjun Li
+Peking University
+wenjunli@pku.edu.cn
+2019.11.11
+
+
+
+
+
+ 
+

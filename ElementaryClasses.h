@@ -151,6 +151,13 @@ enum ClassifierTests {
 	TestPriorityTuple = 0x0002,
 	TestHyperSplit = 0x0004,
 	TestHyperCuts = 0x0008,
+	TestSmartSplit = 0x0010,
+	TestTupleMerge = 0x0020,
+	TestByteCuts = 0x0040,
+	TestCutTSS = 0x0080,
+	TestTabTree = 0x0100,
+	TestCutSplit = 0x0200,
+	TestNPTree = 0x0400,
 	TestAll = 0xFFFFFFFF
 };
 

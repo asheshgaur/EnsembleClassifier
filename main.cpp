@@ -8,6 +8,7 @@
 #include "Trees/HyperCuts.h"
 
 #include "OVS/TupleSpaceSearch.h"
+#include "Utilities/Tcam.h"
 #include "ClassBenchTraceGenerator/trace_tools.h"
 
 #include "PartitionSort/PartitionSort.h"
@@ -125,7 +126,7 @@ int main(int argc, char* argv[]) {
 		printf("\tf=<file> or rules=<file>          Filter file in ClassBench/MSU format\n");
 		printf("\tp=<file> or packets=<file>        Packet trace file, or Auto to generate from rules\n");
 		printf("\to=<file> or output=<file>         CSV output file\n");
-		printf("\tc=<name> or technique=<name>      Classifier: PartitionSort, PriorityTuple/PTSS, HyperCuts, HyperSplit, SmartSplit, TupleMerge, ByteCuts, CutTSS, CutSplit, TabTree, NPTree, All\n");
+		printf("\tc=<name> or technique=<name>      Classifier: PartitionSort, PriorityTuple/PTSS, HyperCuts, HyperSplit, SmartSplit, TupleMerge, ByteCuts, CutTSS, CutSplit, TabTree, NPTree, TCAM, All\n");
 		printf("\tm=<mode>                          Mode: Classification, Update, Validation\n");
 		printf("\tPacketCount=<n>                   Number of packets to auto-generate when p=Auto (default 1000000)\n");
 		printf("\tAccuracyPackets=<n>               Packets used for exact accuracy checking in Classification mode (default 10000, -1 for all)\n");
@@ -336,6 +337,14 @@ const vector<ClassifierDefinition>& GetClassifierDefinitions() {
 			false,
 			[](const unordered_map<string, string>& args) {
 				return unique_ptr<PacketClassifier>(new HyperSplit(args));
+			}
+		},
+		{
+			TestTCAM,
+			"TCAM",
+			false,
+			[](const unordered_map<string, string>&) {
+				return unique_ptr<PacketClassifier>(new TCAMClassifier());
 			}
 		}
 	};
@@ -1725,12 +1734,15 @@ ClassifierTests ParseClassifier(const string& line) {
 		else if (normalized == "nptree") {
 			tests = tests | TestNPTree;
 		}
+		else if (normalized == "tcam") {
+			tests = tests | TestTCAM;
+		}
 		else if (normalized == "all") {
 			tests = tests | TestAll;
 		}
 		else {
 			printf("Unknown classifier: %s\n", classifier.c_str());
-			printf("Supported classifiers: PartitionSort, PriorityTuple/PTSS, HyperCuts, HyperSplit, SmartSplit, TupleMerge, ByteCuts, CutTSS, CutSplit, TabTree, NPTree, All\n");
+			printf("Supported classifiers: PartitionSort, PriorityTuple/PTSS, HyperCuts, HyperSplit, SmartSplit, TupleMerge, ByteCuts, CutTSS, CutSplit, TabTree, NPTree, TCAM, All\n");
 			exit(EINVAL);
 		}
 	}

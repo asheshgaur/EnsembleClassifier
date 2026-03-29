@@ -27,7 +27,7 @@ select modes:  m="Classification", "Update", or "Validation" (Default: classific
 
 select output path and filename.csv: o="Output/64k_fw1_seed_1.csv"
 
-select classifiers: c="PartitionSort,PriorityTuple". It is possible to run multiple classifiers. (Classifiers: "PartitionSort", "PriorityTuple", "PTSS", "HyperCuts", "HyperSplit", "SmartSplit", "TupleMerge", "ByteCuts", "CutTSS", "CutSplit", "TabTree", "NPTree", "All")
+select classifiers: c="PartitionSort,PriorityTuple". It is possible to run multiple classifiers. (Classifiers: "PartitionSort", "PriorityTuple", "PTSS", "HyperCuts", "HyperSplit", "SmartSplit", "TupleMerge", "ByteCuts", "CutTSS", "CutSplit", "TabTree", "NPTree", "TCAM", "All")
 
 You can also use technique="PartitionSort" instead of c=...
 
@@ -149,7 +149,7 @@ python3 train_synthclass.py \
   --batch-size 4 \
   --eval-interval 10 \
   --packets-per-ruleset 512 \
-  --portfolio PartitionSort,PriorityTuple,HyperCuts,HyperSplit,ByteCuts,CutSplit,TabTree,NPTree \
+  --portfolio PartitionSort,PriorityTuple,HyperCuts,HyperSplit,ByteCuts,CutSplit,TabTree,NPTree,TCAM \
   --output-dir Output/synthclass_ppo \
   --save-checkpoint
 ```
@@ -162,7 +162,7 @@ Supervised leaf-classifier training flow:
 python3 build_supervised_leaf_dataset.py \
   --rulesets Rulesets/1k_2k_4k_8k/1k_1 \
   --packets-per-ruleset 256 \
-  --portfolio PartitionSort,PriorityTuple,HyperCuts,HyperSplit,ByteCuts,CutSplit,TabTree,NPTree \
+  --portfolio PartitionSort,PriorityTuple,HyperCuts,HyperSplit,ByteCuts,CutSplit,TabTree,NPTree,TCAM \
   --output-dir Output/supervised_leaf_dataset
 ```
 

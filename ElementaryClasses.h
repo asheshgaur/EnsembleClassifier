@@ -158,6 +158,7 @@ enum ClassifierTests {
 	TestTabTree = 0x0100,
 	TestCutSplit = 0x0200,
 	TestNPTree = 0x0400,
+	TestTCAM = 0x0800,
 	TestAll = 0xFFFFFFFF
 };
 

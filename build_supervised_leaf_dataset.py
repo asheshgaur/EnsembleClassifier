@@ -23,6 +23,7 @@ DEFAULT_PORTFOLIO = (
     "CutSplit",
     "TabTree",
     "NPTree",
+    "TCAM",
 )
 
 

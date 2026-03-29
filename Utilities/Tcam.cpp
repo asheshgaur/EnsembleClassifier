@@ -34,3 +34,41 @@ namespace tcam {
 		return sum;
 	}
 }
+
+void TCAMClassifier::ConstructClassifier(const vector<Rule>& rules) {
+	this->rules = rules;
+	SortRules(this->rules);
+	RecomputePrefixRuleCount();
+}
+
+int TCAMClassifier::ClassifyAPacket(const Packet& packet) {
+	QueryUpdate(1);
+	for (const Rule& rule : rules) {
+		if (rule.MatchesPacket(packet)) {
+			return rule.priority;
+		}
+	}
+	return -1;
+}
+
+void TCAMClassifier::DeleteRule(size_t index) {
+	if (index >= rules.size()) {
+		return;
+	}
+	rules.erase(rules.begin() + index);
+	RecomputePrefixRuleCount();
+}
+
+void TCAMClassifier::InsertRule(const Rule& rule) {
+	rules.push_back(rule);
+	SortRules(rules);
+	RecomputePrefixRuleCount();
+}
+
+Memory TCAMClassifier::MemSizeBytes() const {
+	return static_cast<Memory>(prefixRuleCount * ruleSizeBytes);
+}
+
+void TCAMClassifier::RecomputePrefixRuleCount() {
+	prefixRuleCount = static_cast<size_t>(tcam::SizeAsPrefixRules(rules));
+}

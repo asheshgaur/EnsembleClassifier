@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
+import csv
 import json
 import math
 import random
@@ -352,6 +353,74 @@ def write_leaf_dataset_jsonl(path: Path, rows: Sequence[object]) -> None:
         for row in rows:
             payload = row.to_dict() if hasattr(row, "to_dict") else row
             handle.write(json.dumps(payload, sort_keys=True) + "\n")
+
+
+def write_leaf_dataset_csv(
+    path: Path,
+    rows: Sequence[object],
+    feature_names: Sequence[str],
+    portfolio: Sequence[str],
+) -> None:
+    fieldnames: List[str] = [
+        "source_ruleset_path",
+        "ruleset_name",
+        "leaf_id",
+        "depth",
+        "rule_count",
+        "packet_count",
+        "remaining_dimensions",
+        "used_dimensions",
+        "partition_config_name",
+        "rule_ids",
+        "best_technique",
+        "best_cost",
+    ]
+    fieldnames.extend(feature_names)
+    for classifier_name in portfolio:
+        prefix = f"{classifier_name}__"
+        fieldnames.extend(
+            [
+                prefix + "construction_time_ms",
+                prefix + "classification_time_s",
+                prefix + "memory_bytes",
+                prefix + "accuracy_percent",
+                prefix + "valid",
+                prefix + "error",
+            ]
+        )
+    with path.open("w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        for row in rows:
+            payload = row.to_dict() if hasattr(row, "to_dict") else row
+            record = {
+                "source_ruleset_path": payload.get("source_ruleset_path", ""),
+                "ruleset_name": payload.get("ruleset_name", ""),
+                "leaf_id": payload.get("leaf_id", ""),
+                "depth": payload.get("depth", 0),
+                "rule_count": payload.get("rule_count", 0),
+                "packet_count": payload.get("packet_count", 0),
+                "remaining_dimensions": ",".join(str(value) for value in payload.get("remaining_dimensions", [])),
+                "used_dimensions": ",".join(str(value) for value in payload.get("used_dimensions", [])),
+                "partition_config_name": payload.get("partition_config_name", ""),
+                "rule_ids": ",".join(str(value) for value in payload.get("rule_ids", [])),
+                "best_technique": payload.get("best_technique", ""),
+                "best_cost": payload.get("best_cost", 0.0),
+            }
+            feature_vector = list(payload.get("feature_vector", []))
+            for index, feature_name in enumerate(feature_names):
+                record[feature_name] = feature_vector[index] if index < len(feature_vector) else ""
+            targets = payload.get("targets", {})
+            for classifier_name in portfolio:
+                prefix = f"{classifier_name}__"
+                target = targets.get(classifier_name, {})
+                record[prefix + "construction_time_ms"] = target.get("construction_time_ms", "")
+                record[prefix + "classification_time_s"] = target.get("classification_time_s", "")
+                record[prefix + "memory_bytes"] = target.get("memory_bytes", "")
+                record[prefix + "accuracy_percent"] = target.get("accuracy_percent", "")
+                record[prefix + "valid"] = target.get("valid", "")
+                record[prefix + "error"] = target.get("error", "")
+            writer.writerow(record)
 
 
 def build_leaf_supervision_dataset(

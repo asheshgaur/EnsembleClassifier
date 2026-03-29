@@ -169,6 +169,7 @@ python3 build_supervised_leaf_dataset.py \
 That writes:
 
 - `leaf_dataset.jsonl`
+- `leaf_dataset.csv`
 - `leaf_dataset_metadata.json`
 - `dataset_summary.json`
 

@@ -9,6 +9,7 @@ from synthclass import BenchmarkRunner, SynthClassSettings, default_config_catal
 from synthclass.supervised import (
     build_leaf_supervision_dataset,
     read_leaf_dataset_jsonl,
+    write_leaf_dataset_csv,
     write_leaf_dataset_jsonl,
 )
 
@@ -73,6 +74,7 @@ def main() -> None:
         max_depth=args.max_depth,
     )
     dataset_path = output_dir / "leaf_dataset.jsonl"
+    csv_dataset_path = output_dir / "leaf_dataset.csv"
     metadata_path = output_dir / "leaf_dataset_metadata.json"
     existing_rows = []
     rulesets_to_process = list(ruleset_paths)
@@ -125,6 +127,12 @@ def main() -> None:
     metadata_payload = metadata.to_dict()
     metadata_payload["benchmark_cache"] = str(cache_path)
     metadata_path.write_text(json.dumps(metadata_payload, indent=2, sort_keys=True))
+    write_leaf_dataset_csv(
+        csv_dataset_path,
+        combined_examples,
+        feature_names=metadata.feature_names,
+        portfolio=portfolio,
+    )
     summary = {
         "ruleset_count": len(ruleset_paths),
         "new_ruleset_count": len(rulesets_to_process),
@@ -133,6 +141,7 @@ def main() -> None:
         "leaf_count": len(combined_examples),
         "portfolio": list(portfolio),
         "feature_count": len(metadata.feature_names),
+        "csv_dataset": str(csv_dataset_path),
         "benchmark_cache": str(cache_path),
         "cache_stats": benchmark_runner.cache_stats(),
         "output_dir": str(output_dir),

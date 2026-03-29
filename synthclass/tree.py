@@ -16,8 +16,8 @@ from .core import (
     Range,
     Rule,
     TreeCost,
+    connected_rule_components,
     extract_node_observation,
-    interval_overlaps,
 )
 
 
@@ -220,40 +220,6 @@ class SynthClassBuilder:
     ) -> CompositionNode:
         node_id = f"v{self._node_counter}"
         self._node_counter += 1
-        for field in remaining_dimensions:
-            if self._is_bypass_dimension(rules, field):
-                next_dimensions = tuple(dimension for dimension in remaining_dimensions if dimension != field)
-                self._emit_node_log(
-                    {
-                        "node_id": node_id,
-                        "kind": "bypass",
-                        "depth": depth,
-                        "rule_count": len(rules),
-                        "packet_count": len(packets),
-                        "remaining_dimensions": list(remaining_dimensions),
-                        "split_dimension": field,
-                        "fixed_range": list(rules[0].ranges[field]) if rules else None,
-                    }
-                )
-                child = self._build_node(rules, packets, next_dimensions, depth + 1, deterministic)
-                metrics = TreeCost(
-                    total_classification_time_s=child.metrics.total_classification_time_s
-                    + len(packets) * self._bypass_cost_seconds(child),
-                    total_build_time_ms=child.metrics.total_build_time_ms,
-                    total_memory_bytes=child.metrics.total_memory_bytes + self._bypass_memory_bytes(child),
-                )
-                return CompositionNode(
-                    node_id=node_id,
-                    kind="bypass",
-                    depth=depth,
-                    rule_ids=tuple(rule.rule_id for rule in rules),
-                    packet_count=len(packets),
-                    remaining_dimensions=remaining_dimensions,
-                    split_dimension=field,
-                    fixed_range=rules[0].ranges[field] if rules else None,
-                    child=child,
-                    metrics=metrics,
-                )
 
         observation = extract_node_observation(
             rules=rules,
@@ -265,6 +231,8 @@ class SynthClassBuilder:
             max_pair_samples=self.settings.pairwise_overlap_samples,
         )
         action = self.controller.select_action(observation, deterministic=deterministic)
+        if remaining_dimensions:
+            action.split_dimension = remaining_dimensions[0]
         self._emit_node_log(
             {
                 "node_id": node_id,
@@ -314,42 +282,49 @@ class SynthClassBuilder:
             self._emit_terminal_log(node)
             return node
 
-        split_dimension = action.split_dimension
-        if split_dimension is None or split_dimension not in remaining_dimensions:
-            split_dimension = remaining_dimensions[0]
-        regions = self._build_regions(rules, split_dimension, action.config.routing_fanout)
-        child_partitions = self._partition_children(rules, packets, split_dimension, regions)
+        split_dimension = remaining_dimensions[0]
+        components = connected_rule_components(rules, split_dimension)
         next_dimensions = tuple(dimension for dimension in remaining_dimensions if dimension != split_dimension)
-        useful_children = [partition for partition in child_partitions if partition[1]]
-        if len(useful_children) <= 1 or all(len(child_rules) == len(rules) for _, child_rules, _ in useful_children):
-            benchmark = self.benchmark_runner.benchmark_terminal(rules, packets, action.classifier_name, action.config)
-            metrics = TreeCost(
-                total_classification_time_s=benchmark.classification_time_s,
-                total_build_time_ms=benchmark.construction_time_ms,
-                total_memory_bytes=benchmark.memory_bytes,
+        if len(components) <= 1:
+            self._emit_node_log(
+                {
+                    "node_id": node_id,
+                    "kind": "bypass",
+                    "depth": depth,
+                    "rule_count": len(rules),
+                    "packet_count": len(packets),
+                    "remaining_dimensions": list(remaining_dimensions),
+                    "split_dimension": split_dimension,
+                    "fixed_range": None,
+                }
             )
-            node = CompositionNode(
+            child = self._build_node(rules, packets, next_dimensions, depth + 1, deterministic)
+            metrics = TreeCost(
+                total_classification_time_s=child.metrics.total_classification_time_s
+                + len(packets) * self._bypass_cost_seconds(child),
+                total_build_time_ms=child.metrics.total_build_time_ms,
+                total_memory_bytes=child.metrics.total_memory_bytes + self._bypass_memory_bytes(child),
+            )
+            return CompositionNode(
                 node_id=node_id,
-                kind="terminal",
+                kind="bypass",
                 depth=depth,
                 rule_ids=tuple(rule.rule_id for rule in rules),
                 packet_count=len(packets),
                 remaining_dimensions=remaining_dimensions,
-                classifier_name=action.classifier_name,
-                config_name=action.config.name,
-                benchmark=benchmark,
+                split_dimension=split_dimension,
+                child=child,
                 metrics=metrics,
             )
-            self._emit_terminal_log(node, fallback_split_dimension=split_dimension)
-            return node
 
         metrics = TreeCost(
-            total_classification_time_s=len(packets) * self._routing_cost_seconds(action),
+            total_classification_time_s=len(packets) * self._routing_cost_seconds(action, len(components)),
             total_build_time_ms=0.0,
-            total_memory_bytes=self._routing_memory_bytes(action, len(useful_children)),
+            total_memory_bytes=self._routing_memory_bytes(action, len(components)),
         )
         edges: List[RoutingEdge] = []
-        for region, child_rules, child_packets in useful_children:
+        for region, child_rules in components:
+            child_packets = self._packets_in_region(packets, split_dimension, region)
             child_node = self._build_node(child_rules, child_packets, next_dimensions, depth + 1, deterministic)
             metrics += child_node.metrics
             edges.append(RoutingEdge(region=region, child=child_node))
@@ -410,47 +385,12 @@ class SynthClassBuilder:
         self.node_logger(event)
 
     @staticmethod
-    def _is_bypass_dimension(rules: Sequence[Rule], field: int) -> bool:
-        if not rules:
-            return False
-        low, high = rules[0].ranges[field]
-        for rule in rules[1:]:
-            if rule.ranges[field] != (low, high):
-                return False
-        return True
+    def _packets_in_region(packets: Sequence[Packet], field: int, region: Range) -> List[Packet]:
+        return [packet for packet in packets if region[0] <= packet[field] <= region[1]]
 
     @staticmethod
-    def _build_regions(rules: Sequence[Rule], field: int, fanout: int) -> List[Range]:
-        low = min(rule.ranges[field][0] for rule in rules)
-        high = max(rule.ranges[field][1] for rule in rules)
-        if low >= high or fanout <= 1:
-            return [(low, high)]
-        width = max(1, math.ceil((high - low + 1) / float(fanout)))
-        regions: List[Range] = []
-        start = low
-        while start <= high and len(regions) < fanout:
-            end = high if len(regions) == fanout - 1 else min(high, start + width - 1)
-            regions.append((start, end))
-            start = end + 1
-        return regions
-
-    @staticmethod
-    def _partition_children(
-        rules: Sequence[Rule],
-        packets: Sequence[Packet],
-        field: int,
-        regions: Sequence[Range],
-    ) -> List[Tuple[Range, List[Rule], List[Packet]]]:
-        partitions: List[Tuple[Range, List[Rule], List[Packet]]] = []
-        for region in regions:
-            child_rules = [rule for rule in rules if interval_overlaps(rule.ranges[field], region)]
-            child_packets = [packet for packet in packets if region[0] <= packet[field] <= region[1]]
-            partitions.append((region, child_rules, child_packets))
-        return partitions
-
-    @staticmethod
-    def _routing_cost_seconds(action: ControllerAction) -> float:
-        comparisons = max(1, math.ceil(math.log2(max(2, action.config.routing_fanout))))
+    def _routing_cost_seconds(action: ControllerAction, child_count: int) -> float:
+        comparisons = max(1, math.ceil(math.log2(max(2, child_count))))
         return comparisons * action.config.routing_compare_cost_ns * 1e-9
 
     @staticmethod

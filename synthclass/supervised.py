@@ -16,6 +16,7 @@ from .core import (
     NodeConfigChoice,
     Packet,
     Rule,
+    connected_rule_components,
     default_config_catalog,
     extract_node_observation,
 )
@@ -162,21 +163,6 @@ class LeafPartitionPlanner:
         leaf_id = f"v{self._node_counter}"
         self._node_counter += 1
 
-        for field in remaining_dimensions:
-            if self._is_bypass_dimension(rules, field):
-                next_dimensions = tuple(dimension for dimension in remaining_dimensions if dimension != field)
-                next_used = tuple(sorted(set(used_dimensions + (field,))))
-                self._collect_node(
-                    ruleset_name=ruleset_name,
-                    rules=rules,
-                    packets=packets,
-                    remaining_dimensions=next_dimensions,
-                    used_dimensions=next_used,
-                    depth=depth + 1,
-                    leaves=leaves,
-                )
-                return
-
         observation = extract_node_observation(
             rules=rules,
             packets=packets,
@@ -202,30 +188,24 @@ class LeafPartitionPlanner:
             )
             return
 
-        split_dimension = self._pick_dimension(observation)
-        if split_dimension not in remaining_dimensions:
-            split_dimension = remaining_dimensions[0]
-        regions = self._build_regions(rules, split_dimension, config.routing_fanout)
-        child_partitions = self._partition_children(rules, packets, split_dimension, regions)
-        useful_children = [partition for partition in child_partitions if partition[1]]
-        if len(useful_children) <= 1 or all(len(child_rules) == len(rules) for _, child_rules, _ in useful_children):
-            leaves.append(
-                LeafSubset(
-                    ruleset_name=ruleset_name,
-                    leaf_id=leaf_id,
-                    depth=depth,
-                    rules=list(rules),
-                    packets=list(packets),
-                    remaining_dimensions=remaining_dimensions,
-                    used_dimensions=used_dimensions,
-                    partition_config=config,
-                )
+        split_dimension = remaining_dimensions[0]
+        components = connected_rule_components(rules, split_dimension)
+        next_dimensions = tuple(dimension for dimension in remaining_dimensions if dimension != split_dimension)
+        next_used = tuple(sorted(set(used_dimensions + (split_dimension,))))
+        if len(components) <= 1:
+            self._collect_node(
+                ruleset_name=ruleset_name,
+                rules=rules,
+                packets=packets,
+                remaining_dimensions=next_dimensions,
+                used_dimensions=next_used,
+                depth=depth + 1,
+                leaves=leaves,
             )
             return
 
-        next_dimensions = tuple(dimension for dimension in remaining_dimensions if dimension != split_dimension)
-        next_used = tuple(sorted(set(used_dimensions + (split_dimension,))))
-        for _, child_rules, child_packets in useful_children:
+        for region, child_rules in components:
+            child_packets = self._packets_in_region(packets, split_dimension, region)
             self._collect_node(
                 ruleset_name=ruleset_name,
                 rules=child_rules,
@@ -242,57 +222,9 @@ class LeafPartitionPlanner:
                 return config
         return self.config_catalog[-1]
 
-    def _pick_dimension(self, observation) -> int:
-        if not observation.available_dimensions:
-            return 0
-        best_dimension = observation.available_dimensions[0]
-        best_score = float("-inf")
-        for dimension in observation.available_dimensions:
-            unique_endpoints, overlap_ratio, entropy, prefix_fraction = observation.per_dimension_features[dimension]
-            score = unique_endpoints + entropy + prefix_fraction - overlap_ratio
-            if score > best_score:
-                best_score = score
-                best_dimension = dimension
-        return best_dimension
-
     @staticmethod
-    def _is_bypass_dimension(rules: Sequence[Rule], field: int) -> bool:
-        if not rules:
-            return False
-        low, high = rules[0].ranges[field]
-        for rule in rules[1:]:
-            if rule.ranges[field] != (low, high):
-                return False
-        return True
-
-    @staticmethod
-    def _build_regions(rules: Sequence[Rule], field: int, fanout: int) -> List[Tuple[int, int]]:
-        low = min(rule.ranges[field][0] for rule in rules)
-        high = max(rule.ranges[field][1] for rule in rules)
-        if low >= high or fanout <= 1:
-            return [(low, high)]
-        width = max(1, math.ceil((high - low + 1) / float(fanout)))
-        regions: List[Tuple[int, int]] = []
-        start = low
-        while start <= high and len(regions) < fanout:
-            end = high if len(regions) == fanout - 1 else min(high, start + width - 1)
-            regions.append((start, end))
-            start = end + 1
-        return regions
-
-    @staticmethod
-    def _partition_children(
-        rules: Sequence[Rule],
-        packets: Sequence[Packet],
-        field: int,
-        regions: Sequence[Tuple[int, int]],
-    ) -> List[Tuple[Tuple[int, int], List[Rule], List[Packet]]]:
-        partitions: List[Tuple[Tuple[int, int], List[Rule], List[Packet]]] = []
-        for region in regions:
-            child_rules = [rule for rule in rules if not (rule.ranges[field][1] < region[0] or region[1] < rule.ranges[field][0])]
-            child_packets = [packet for packet in packets if region[0] <= packet[field] <= region[1]]
-            partitions.append((region, child_rules, child_packets))
-        return partitions
+    def _packets_in_region(packets: Sequence[Packet], field: int, region: Tuple[int, int]) -> List[Packet]:
+        return [packet for packet in packets if region[0] <= packet[field] <= region[1]]
 
 
 def extract_leaf_feature_names() -> Tuple[str, ...]:

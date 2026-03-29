@@ -266,6 +266,42 @@ def interval_overlap_ratio(a: Range, b: Range) -> float:
     return overlap / float(union)
 
 
+def connected_rule_components(rules: Sequence[Rule], field: int) -> List[Tuple[Range, List[Rule]]]:
+    if not rules:
+        return []
+    indexed_rules = list(enumerate(rules))
+    sorted_rules = sorted(
+        indexed_rules,
+        key=lambda item: (item[1].ranges[field][0], item[1].ranges[field][1], item[0]),
+    )
+    components: List[Tuple[Range, List[Rule]]] = []
+    current_members: List[Tuple[int, Rule]] = [sorted_rules[0]]
+    current_low = sorted_rules[0][1].ranges[field][0]
+    current_high = sorted_rules[0][1].ranges[field][1]
+    for indexed_rule in sorted_rules[1:]:
+        low, high = indexed_rule[1].ranges[field]
+        if low <= current_high:
+            current_members.append(indexed_rule)
+            current_high = max(current_high, high)
+            continue
+        components.append(
+            (
+                (current_low, current_high),
+                [rule for _, rule in sorted(current_members, key=lambda item: item[0])],
+            )
+        )
+        current_members = [indexed_rule]
+        current_low = low
+        current_high = high
+    components.append(
+        (
+            (current_low, current_high),
+            [rule for _, rule in sorted(current_members, key=lambda item: item[0])],
+        )
+    )
+    return components
+
+
 def is_prefix_alignable(low: int, high: int) -> bool:
     size = high - low + 1
     return size > 0 and (size & (size - 1) == 0) and low % size == 0
